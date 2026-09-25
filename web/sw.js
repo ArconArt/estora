@@ -1,7 +1,7 @@
 /* ESTORA — offline shell.
    Only same-origin GETs are cached, so calls to Supabase always go straight
    to the network and are never served from a stale copy. */
-const CACHE = 'estora-v1';
+const CACHE = 'estora-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

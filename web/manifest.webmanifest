@@ -1,7 +1,7 @@
 {
   "name": "ESTORA",
   "short_name": "ESTORA",
-  "description": "Joinery, fit-out and door estimating — cut-list pricing, cutting layouts, BOM and team workspaces.",
+  "description": "Joinery, fit-out and door estimating — cut-list pricing, cutting layouts, timber, BOM, PDF and Excel.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -11,5 +11,9 @@
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
     { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
+  ],
+  "file_handlers": [
+    { "action": "./", "accept": { "application/json": [".estora"] } }
+  ],
+  "launch_handler": { "client_mode": "focus-existing" }
 }
