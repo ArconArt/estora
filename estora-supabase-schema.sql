@@ -101,7 +101,7 @@ begin
     'plan', o.plan, 'expiresOn', o.expires_on, 'daysLeft', left_days, 'expired', left_days < 0,
     'trial', o.plan = 'trial', 'enforce', coalesce(es_setting('enforce_limits'), 'on') = 'on',
     'items', case when o.plan = 'trial' then coalesce(es_setting('trial_items'), '5')::int else null end,
-    'key', o.license_key, 'activatedAt', o.activated_at);
+    'key', o.license_key, 'activatedAt', o.activated_at, 'store', o.ls_order is not null);
 end $$;
 
 -- the browser never chooses org_id: it is taken from the caller's own account
@@ -170,6 +170,37 @@ create table if not exists es_payments (
 create unique index if not exists es_payments_ref on es_payments(provider, provider_ref) where provider_ref is not null;
 create index if not exists es_payments_org on es_payments(org_id, created_at desc);
 
+-- ---------- purchases on the ARCON store (Lemon Squeezy); the functions are further down ----------
+alter table es_orgs add column if not exists ls_order text;
+
+create table if not exists es_ls_orders (
+  order_id     text primary key,
+  sub_id       text,
+  org_id       text references es_orgs(id) on delete set null,
+  email        text,
+  plan         text not null,
+  expires_on   date not null,
+  status       text not null default 'active',     -- active | ended
+  variant      text,
+  amount_cents bigint,
+  currency     text default 'USD',
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+create index if not exists es_ls_orders_sub   on es_ls_orders(sub_id);
+create index if not exists es_ls_orders_email on es_ls_orders(lower(email));
+create index if not exists es_ls_orders_org   on es_ls_orders(org_id);
+create table if not exists es_ls_keys (
+  key        text primary key,
+  order_id   text not null,
+  email      text,
+  status     text not null default 'active',
+  created_at timestamptz not null default now()
+);
+alter table es_ls_orders enable row level security;
+alter table es_ls_keys   enable row level security;
+
+
 -- ---------- organisation stamp ----------
 do $do$
 declare t text;
@@ -206,6 +237,7 @@ create policy es_meta_ins   on es_meta  for insert with check (org_id = es_org()
 create policy es_meta_upd   on es_meta  for update using (org_id = es_org()) with check (org_id = es_org());
 create policy es_keys_read  on es_license_keys for select using (org_id = es_org());
 create policy es_payments_read on es_payments for select using (org_id = es_org());
+create policy es_ls_orders_read on es_ls_orders for select using (org_id = es_org());
 
 -- ====================================================================
 -- LICENCE KEYS — format ES2-XXXX-XXXX-XXXX-XXX, checked here.
@@ -257,11 +289,23 @@ end $$;
 
 create or replace function es_activate_key(p_key text) returns jsonb
   language plpgsql security definer set search_path = public as $$
-declare k jsonb; org text := es_org(); holder text;
+declare k jsonb; org text := es_org(); holder text; lk es_ls_keys; lo es_ls_orders;
 begin
   if auth.uid() is null or org is null then raise exception 'sign in first' using errcode = '42501'; end if;
   k := es_read_key(p_key);
-  if k is null then raise exception 'That key is not valid — check it was copied completely.' using errcode = '22023'; end if;
+  if k is null then
+    -- not one of our own keys: a licence key from a Lemon Squeezy receipt
+    select * into lk from es_ls_keys where upper(key) = upper(trim(coalesce(p_key,'')));
+    if not found then raise exception 'That key is not valid — check it was copied completely.' using errcode = '22023'; end if;
+    if lk.status not in ('active','inactive') then raise exception 'That key has been switched off.' using errcode = '22023'; end if;
+    select * into lo from es_ls_orders where order_id = lk.order_id;
+    if not found then raise exception 'That purchase has not reached us yet — try again in a minute.' using errcode = '22023'; end if;
+    if lo.org_id is not null and lo.org_id <> org then raise exception 'That key is already in use on another account.' using errcode = '42501'; end if;
+    if lo.status <> 'active' or lo.expires_on < current_date then raise exception 'That subscription ended on %.', lo.expires_on using errcode = '22023'; end if;
+    update es_ls_orders set org_id = org, updated_at = now() where order_id = lo.order_id;
+    perform es_ls_apply(lo.order_id);
+    return es_license_of(org);
+  end if;
   if (k->>'expiresOn')::date < current_date then raise exception 'That key expired on %.', k->>'expiresOn' using errcode = '22023'; end if;
   select org_id into holder from es_license_keys where key = k->>'key';
   if holder is not null and holder <> org then
@@ -297,6 +341,7 @@ begin
             coalesce(nullif(trim(p_person_name), ''), split_part(coalesce(em, 'User'), '@', 1)), em, 'Admin', true);
   insert into es_meta (org_id, id, data) values (new_org, 'org', jsonb_build_object('name', trim(p_org_name)))
     on conflict (org_id, id) do nothing;
+  perform es_claim_orders();
   return jsonb_build_object('orgId', new_org, 'created', true);
 end $$;
 
@@ -308,6 +353,7 @@ begin
   if uid is null then return jsonb_build_object('orgId', null); end if;
   select * into r from es_users where auth_uid = uid limit 1;
   if not found then return jsonb_build_object('orgId', null, 'isOwner', es_is_owner()); end if;
+  perform es_claim_orders();
   select name into on_name from es_orgs where id = r.org_id;
   return jsonb_build_object('orgId', r.org_id, 'orgName', on_name, 'userId', r.id, 'name', r.name,
     'email', r.email, 'active', r.active, 'license', es_license_of(r.org_id), 'isOwner', es_is_owner());
@@ -377,6 +423,119 @@ begin
   return es_license_of(p_org);
 end $$;
 
+-- ====================================================================
+-- LEMON SQUEEZY — plans bought on the ARCON store
+-- The webhook (supabase/functions/estora-ls-webhook) calls es_ls_grant,
+-- es_ls_end and es_ls_key with the service key; nothing here can be
+-- called from a browser. A purchase is attached to the buyer's ARCON
+-- account: by the account id the checkout carries, otherwise by the
+-- email that paid — now, or the first time that email signs in. A
+-- licence key from the receipt attaches the purchase to whichever
+-- account pastes it.
+-- ====================================================================
+create or replace function es_org_for_email(p_email text) returns text
+  language sql stable security definer set search_path = public as $$
+  select u.org_id from es_users u left join auth.users a on a.id = u.auth_uid
+   where u.active and lower(coalesce(a.email, u.email)) = lower(trim(p_email))
+   order by u.created_at limit 1 $$;
+
+-- put one order's plan onto the account it belongs to
+create or replace function es_ls_apply(p_order text) returns void
+  language plpgsql security definer set search_path = public as $$
+declare o es_ls_orders;
+begin
+  select * into o from es_ls_orders where order_id = p_order;
+  if not found or o.org_id is null then return; end if;
+  perform set_config('es.trusted', 'on', true);
+  if o.status = 'active' then
+    update es_orgs set plan = o.plan, expires_on = o.expires_on, ls_order = o.order_id,
+                       activated_at = coalesce(activated_at, now()), updated_at = now() where id = o.org_id;
+    if o.amount_cents is not null then
+      insert into es_payments (org_id, provider, provider_ref, status, amount, currency, plan, period_start, period_end, payer_email)
+        values (o.org_id, 'lemonsqueezy', 'ls-' || o.order_id, 'paid', o.amount_cents / 100.0, coalesce(o.currency,'USD'),
+                o.plan, current_date, o.expires_on, o.email)
+        on conflict do nothing;
+    end if;
+  else
+    update es_orgs set expires_on = least(expires_on, current_date - 1), updated_at = now()
+     where id = o.org_id and ls_order = o.order_id;
+  end if;
+end $$;
+
+-- money arrived, or a subscription changed. p_order may be null for a renewal invoice, which only knows its subscription.
+create or replace function es_ls_grant(p_order text, p_sub text, p_plan text, p_expiry date, p_exact boolean,
+                                       p_email text, p_org text, p_amount_cents bigint default null,
+                                       p_currency text default 'USD', p_pay_ref text default null,
+                                       p_variant text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_order text := nullif(p_order, ''); o es_ls_orders; v_org text;
+begin
+  perform set_config('es.trusted', 'on', true);
+  if v_order is null and p_sub is not null then select order_id into v_order from es_ls_orders where sub_id = p_sub limit 1; end if;
+  if v_order is null then return jsonb_build_object('matched', false, 'why', 'not an ESTORA order'); end if;
+  select id into v_org from es_orgs where id = p_org;
+  select * into o from es_ls_orders where order_id = v_order;
+  if not found then
+    if p_plan is null or p_expiry is null then return jsonb_build_object('matched', false, 'why', 'order not seen yet'); end if;
+    insert into es_ls_orders (order_id, sub_id, org_id, email, plan, expires_on, variant, amount_cents, currency)
+      values (v_order, nullif(p_sub,''), v_org, nullif(trim(p_email),''), p_plan, p_expiry, p_variant, p_amount_cents, coalesce(p_currency,'USD'));
+  else
+    update es_ls_orders set
+      sub_id = coalesce(nullif(p_sub,''), sub_id), org_id = coalesce(org_id, v_org),
+      email = coalesce(nullif(trim(p_email),''), email), plan = coalesce(p_plan, plan),
+      expires_on = case when p_expiry is not null and (p_exact or expires_on is null) then p_expiry else expires_on end,
+      status = case when p_expiry is not null then 'active' else status end,
+      variant = coalesce(p_variant, variant), amount_cents = coalesce(amount_cents, p_amount_cents), updated_at = now()
+     where order_id = v_order;
+  end if;
+  select * into o from es_ls_orders where order_id = v_order;
+  if o.org_id is null and o.email is not null then
+    update es_ls_orders set org_id = es_org_for_email(o.email) where order_id = v_order;
+    select * into o from es_ls_orders where order_id = v_order;
+  end if;
+  perform es_ls_apply(v_order);
+  if p_pay_ref is not null and o.org_id is not null and p_amount_cents is not null then
+    insert into es_payments (org_id, provider, provider_ref, status, amount, currency, plan, period_start, period_end, payer_email)
+      values (o.org_id, 'lemonsqueezy', p_pay_ref, 'paid', p_amount_cents / 100.0, coalesce(p_currency,'USD'), o.plan, current_date, o.expires_on, o.email)
+      on conflict do nothing;
+  end if;
+  return jsonb_build_object('matched', o.org_id is not null, 'order', v_order, 'org', o.org_id, 'plan', o.plan, 'until', o.expires_on);
+end $$;
+
+-- a subscription ran out or was refunded
+create or replace function es_ls_end(p_order text, p_sub text) returns jsonb
+  language plpgsql security definer set search_path = public as $$
+declare v_order text := nullif(p_order, '');
+begin
+  if v_order is null and p_sub is not null then select order_id into v_order from es_ls_orders where sub_id = p_sub limit 1; end if;
+  if v_order is null or not exists (select 1 from es_ls_orders where order_id = v_order) then
+    return jsonb_build_object('matched', false); end if;
+  update es_ls_orders set status = 'ended', updated_at = now() where order_id = v_order;
+  perform es_ls_apply(v_order);
+  return jsonb_build_object('matched', true, 'ended', v_order);
+end $$;
+
+-- the licence key Lemon Squeezy prints on the receipt
+create or replace function es_ls_key(p_key text, p_order text, p_email text, p_status text default 'active') returns void
+  language sql security definer set search_path = public as $$
+  insert into es_ls_keys (key, order_id, email, status) values (trim(p_key), p_order, nullif(trim(p_email),''), coalesce(p_status,'active'))
+  on conflict (key) do update set status = excluded.status, order_id = excluded.order_id $$;
+
+-- purchases made with this account's email before the account existed (or before it was matched)
+create or replace function es_claim_orders() returns int
+  language plpgsql security definer set search_path = public as $$
+declare org text := es_org(); em text; r record; n int := 0;
+begin
+  if org is null then return 0; end if;
+  select email into em from auth.users where id = auth.uid();
+  if em is null then return 0; end if;
+  for r in select order_id from es_ls_orders where org_id is null and lower(email) = lower(em) order by created_at loop
+    update es_ls_orders set org_id = org, updated_at = now() where order_id = r.order_id;
+    perform es_ls_apply(r.order_id); n := n + 1;
+  end loop;
+  return n;
+end $$;
+
 -- functions from the earlier team edition that no longer apply
 drop function if exists es_claim_invite(text);
 drop function if exists es_delete_project(text);
@@ -400,13 +559,17 @@ begin
     if r = 'public' or exists (select 1 from pg_roles where rolname = r) then
       foreach f in array array['es_setting(text)','es_read_key(text)','es_license_of(text)',
           'es_record_payment(text,text,text,numeric,text,text,date,text,jsonb)',
-          'es_h32(text)','es_b36(bigint,int)','es_from36(text)'] loop
+          'es_h32(text)','es_b36(bigint,int)','es_from36(text)','es_org_for_email(text)','es_ls_apply(text)','es_claim_orders()',
+          'es_ls_grant(text,text,text,date,boolean,text,text,bigint,text,text,text)','es_ls_end(text,text)','es_ls_key(text,text,text,text)'] loop
         execute format('revoke execute on function %s from %s', f, case when r='public' then 'public' else quote_ident(r) end);
       end loop;
     end if;
   end loop;
   if exists (select 1 from pg_roles where rolname = 'service_role') then
     grant execute on function es_record_payment(text,text,text,numeric,text,text,date,text,jsonb) to service_role;
+    grant execute on function es_ls_grant(text,text,text,date,boolean,text,text,bigint,text,text,text) to service_role;
+    grant execute on function es_ls_end(text,text) to service_role;
+    grant execute on function es_ls_key(text,text,text,text) to service_role;
   end if;
 end $do$;
 
@@ -420,3 +583,6 @@ end $do$;
 -- are no longer used. When you are sure nothing in them is needed:
 --   drop table if exists es_lines, es_projects cascade;
 -- ============================================================
+
+-- tell the API to pick up the new functions straight away
+notify pgrst, 'reload schema';
