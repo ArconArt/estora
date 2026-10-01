@@ -534,6 +534,12 @@ table.grid thead tr + tr th{padding-top:6px}
 :root{--esmark-bg:transparent}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--esmark-bg:#000}}
 :root[data-theme="dark"]{--esmark-bg:#000}
+.authfoot.legal{gap:10px;font-size:11.5px;margin-top:10px}
+.authfoot.legal a{color:var(--ink-3)}
+.oauth{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.orline{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.orline::before,.orline::after{content:"";flex:1;height:1px;background:var(--border)}
+a.btn{text-decoration:none;color:inherit}
 
 </style>
 </head>
@@ -566,8 +572,27 @@ const ESTORA_MARK='<svg xmlns="http://www.w3.org/2000/svg" viewBox="31 0 1716 17
 const CLOUD_URL = 'https://dxdfbkidefsktvzobqth.supabase.co';
 const CLOUD_KEY = 'sb_publishable_osHqvVRKeB7J50NfUfqeQw_0L2DWqz0';
 
-/* Shown on the sign-in screen and the Licence page so customers know who to contact. */
-const SUPPORT_EMAIL = '';
+/* Who sells ESTORA, and where its pages live. ESTORA signs in with the
+   ARCON account — the same account the ARCON website and every other ARCON
+   product use (one Supabase project, one user list). */
+const VENDOR = {
+  brand:   'ARCON',
+  email:   'info@arconget.store',
+  site:    'https://arconget.store',
+  /* The ESTORA page on the ARCON site. Set it and every "Choose plan" button
+     goes there (carrying the account, the email and the way back) instead of
+     opening the checkout here. Leave it empty to open the checkout inside ESTORA. */
+  pricing: '',
+  /* Where a customer manages or cancels a subscription (Lemon Squeezy's own page). */
+  billing: 'https://arconget.lemonsqueezy.com/billing',
+  terms:   'https://arconget.store/terms',
+  privacy: 'https://arconget.store/privacy',
+  refunds: 'https://arconget.store/refunds',
+  /* Sign-in buttons beside email + password. Add 'google' and/or 'apple' once
+     that provider is switched on in Supabase -> Authentication -> Providers. */
+  oauth:   [],
+};
+const SUPPORT_EMAIL = VENDOR.email;
 
 /* Licence plans. Expiry is enforced by the database (es_orgs); these
    describe the plans on screen. Keep the prices in step with
@@ -584,9 +609,14 @@ const PLANS = {
            features:['Everything in Monthly','Save 38% against paying monthly','Priority support']},
 };
 const PLAN_ORDER=['trial','monthly','yearly'];
-/* Optional: a hosted checkout link per plan (Paddle, Lemon Squeezy, Stripe, PayHere…).
-   Left empty, the Choose buttons open a 'how to buy' message instead. */
-const CHECKOUT_LINKS = { monthly:'', yearly:'' };
+/* The Lemon Squeezy checkout link of each plan: in Lemon Squeezy open the
+   product -> Share -> copy the "Checkout URL" of the Monthly and of the Yearly
+   variant, and paste them here. They look like
+     https://arconget.lemonsqueezy.com/checkout/buy/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+   The checkout opens inside ESTORA and carries the signed-in ARCON account, so
+   the plan is switched on automatically when the payment goes through.
+   Left empty, the Choose buttons show a "how to buy" message instead. */
+const CHECKOUT_LINKS = { monthly:'https://arconget.lemonsqueezy.com/checkout/buy/7f80256b-a440-4150-b9c8-4473abeaf829', yearly:'https://arconget.lemonsqueezy.com/checkout/buy/14a5f8a8-261e-4161-8ee6-860cfbf17b87' };
 const TABS = [
   ['estimate','Schedule','schedule'],['bom','Material BOM','bom'],['cutting','Cutting & timber','cut'],['rates','Rates','rates'],
   ['profiles','Profiles & sizes','ruler'],['params','Parameters','params'],['iron','Ironmongery','iron'],['commercial','Commercial','commercial'],
@@ -778,16 +808,16 @@ const SEED_CORES = [
  {id:'U90',  n:'90 min Halspan UL',  r:2600, t:44, fr:90, one:1},
 ];
 const SEED_IRON_ITEMS = [
- {id:'HGF', n:'Fire-rated hinge (CE)', r:95},
- {id:'HGS', n:'Standard hinge',        r:35},
+ {id:'HGF', n:'Fire-rated hinge (CE)', r:95, perLeaf:1},
+ {id:'HGS', n:'Standard hinge',        r:35, perLeaf:1},
  {id:'LOCK',n:'Mortice lockset',       r:180},
- {id:'LEV', n:'Lever handle set',      r:130},
+ {id:'LEV', n:'Lever handle set',      r:130, perLeaf:1},
  {id:'CYL', n:'Cylinder',              r:90},
- {id:'CLO', n:'Door closer',           r:420},
+ {id:'CLO', n:'Door closer',           r:420, perLeaf:1},
  {id:'FBLT',n:'Flush bolt',            r:75},
  {id:'PANC',n:'Panic bar',             r:650},
  {id:'KPL', n:'Kick plate (SS)',       r:160},
- {id:'PULL',n:'Pull handle',           r:190},
+ {id:'PULL',n:'Pull handle',           r:190, perLeaf:1},
  {id:'STOP',n:'Door stop',             r:45},
  {id:'SIGN',n:'Fire signage',          r:25},
  {id:'DSEA',n:'Drop seal',             r:220},
@@ -799,16 +829,22 @@ const SEED_IRON_SETS = [
  {id:'IM02', n:'IM-02 — Fire single, closer',
    items:[['HGF',4],['LOCK',1],['LEV',1],['CLO',1],['SIGN',1],['STOP',1]]},
  {id:'IM03', n:'IM-03 — Fire double, closers + flush bolts',
-   items:[['HGF',8],['LOCK',1],['LEV',1],['CLO',2],['FBLT',2],['SIGN',2]]},
+   items:[['HGF',4],['LOCK',1],['LEV',1],['CLO',1],['FBLT',2],['SIGN',2]]},
  {id:'IM04', n:'IM-04 — Fire escape, panic bar',
    items:[['HGF',4],['PANC',1],['CLO',1],['SIGN',1],['KPL',1]]},
 ];
+// earlier versions listed IM-03 with both leaves' hinges and closers written out
+const OLD_IM03 = JSON.stringify([['HGF',8],['LOCK',1],['LEV',1],['CLO',2],['FBLT',2],['SIGN',2]]);
+const PER_LEAF_SEED = new Set(['HGF','HGS','LEV','CLO','PULL']);
+// how the project prices: whole sheets or area used; transport per item or once for the project; handles on inside drawers
+const SEED_OPTS = {sheetPricing:'sheets', transport:'item', insideHandles:1};
 const SEED_PARAMS = {
   // sheet cutting
   sheetL:2.40, sheetW:1.20, kerf:4, trim:10, lamOversize:10,
   // allowances
   // wastage, % on top of the net quantity (a material can override its own)
-  areaWastePct:20, leafWastePct:35, edgeWastePct:5,
+  areaWastePct:20, leafWastePct:35, edgeWastePct:5, sheetWastePct:15,
+  transportTrips:1,
   // carcase construction
   carcaseFaces:2, backFaces:1, doorFaces:2,
   doorGap:0.003, shelfSetback:0.020, shelfClear:0.002,
@@ -898,6 +934,7 @@ function freshState(){
   return {
     project:{name:'', client:'', location:'JEDDAH', access:1.0, currency:'SAR'},
     params:{...SEED_PARAMS},
+    opts:{...SEED_OPTS},
     commercial:{...SEED_COMMERCIAL},
     types:SEED_TYPES.map(t=>({...t})),
     materials:SEED_MATERIALS.map(m=>({...m})),
@@ -942,6 +979,8 @@ const num  = v  => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
 const int  = v  => Math.max(0, Math.round(num(v)));
 const ceil = n  => (n>0 ? Math.ceil(n - 1e-9) : 0);
 const mm   = v  => Math.round(v*1000);
+// items are whole units: the cutting layout, the BOM and the amount all use the same quantity
+const lineQty = l => Math.max(0, Math.round(num(l.qty)));
 const isCoreId = mid => String(mid).indexOf('CORE:')===0;
 const typeById = gid => S.types.find(t=>t.id===gid);
 const kindOf   = m => (typeById(m.g) || {kind:'other'}).kind;
@@ -969,12 +1008,14 @@ function ironItemsOf(l){
   const set=S.ironSets.find(s=>s.id===(l?l.ironSet:''));
   return set ? set.items : [];
 }
-function ironSetCost(id, items){
+// an item marked "per leaf" (hinges, handle sets, closers) is doubled on a double-leaf door
+function ironSetCost(id, items, nLeaf){
   const set = S.ironSets.find(s=>s.id===id);
   if(!set && !items) return {total:0, parts:[], name:''};
   const parts = (items || set.items).map(([iid,q])=>{
     const it = S.ironItems.find(x=>x.id===iid) || {n:'Missing item — choose another', r:0, missing:true};
-    return {id:iid, n:it.n, q:num(q), r:num(it.r), amt:num(q)*num(it.r), missing:!!it.missing};
+    const mult = (nLeaf===2 && it.perLeaf) ? 2 : 1, tq=num(q)*mult;
+    return {id:iid, n:it.n, base:num(q), mult, q:tq, r:num(it.r), amt:tq*num(it.r), missing:!!it.missing};
   });
   return {total:parts.reduce((a,p)=>a+p.amt,0), parts, name:set?set.n:'Custom'};
 }
@@ -1172,7 +1213,7 @@ function carcaseBuild(l){
   ctx.hw('RUNN','Drawer runners', drw, 'RUNN');
   if(l.handle){ const h=M(l.handle);
     if(h.missing) ctx.warn.add('The selected handle no longer exists — choose another');
-    else ctx.hw('HNDL','Handles', nDoors+drw, h.id); }
+    else ctx.hw('HNDL','Handles', nDoors+((inside && !num((S.opts||{}).insideHandles))?0:drw), h.id); }
   if(T.hanger && rails>0){
     ctx.add('HPIP','Hanger rail', rails*bayW*wasteF(M('HPIP'),0), 'lm', M('HPIP').r, 'HPIP');
     ctx.hw('HHLD','Hanger holders', rails*P.hangerHolderPer, 'HHLD');
@@ -1210,12 +1251,14 @@ function doorBuild(l){
   else ctx.warn.add('Add a door frame profile under Profiles & sizes');
   const sides = l.archSides===undefined ? 2 : int(l.archSides);
   if(ap && sides>0) timberRun(ctx, timber, ap, 'Architrave', per, num(ap.t), num(ap.w), sides);
-  if(lp) timberRun(ctx, timber, lp, 'Leaf lipping', (leafW+leafH)*P.lipEdges, num(lp.w), num(lp.t)>0?num(lp.t):leafT, nLeaf);
+  if(lp && core.id!=='NONE') timberRun(ctx, timber, lp, 'Leaf lipping', (leafW+leafH)*P.lipEdges, num(lp.w), num(lp.t)>0?num(lp.t):leafT, nLeaf);
   if(core.tubular && sp) timberRun(ctx, timber, sp, 'Stile & rail', leafW*3+leafH*2, num(sp.t), num(sp.w), nLeaf);
 
   // one core blank per leaf — a double door takes two
   if(core.id!=='NONE' && leafW>0 && leafH>0){
     pushPart(ctx, 'Door core', 'CORE:'+core.id, 'Leaf core', leafH, leafW, nLeaf, true);
+    if(num(core.fr)>0 && !orientations(sheetInfo('CORE:'+core.id), leafH, leafW).length)
+      ctx.warn.add('A fire-rated core must not be joined — use a larger blank, or make this a double leaf');
     if(core.tubular) pushPart(ctx, 'Crossband', 'MDF6', 'Leaf crossband', leafH, leafW, nLeaf*2);
   }
   const fin = l.leafFinish ? M(l.leafFinish) : null;
@@ -1252,7 +1295,7 @@ function doorBuild(l){
   const hw=hardwareRows(ctx, l);
 
   const rows=[...ctx.rows(), ...hw.rows];
-  const im = ironSetCost(l.ironSet, l.iron && Array.isArray(l.iron.items) ? l.iron.items : null);
+  const im = ironSetCost(l.ironSet, l.iron && Array.isArray(l.iron.items) ? l.iron.items : null, nLeaf);
   if(l.ironSet && !S.ironSets.find(s=>s.id===l.ironSet)) ctx.warn.add('The selected ironmongery set no longer exists — choose another');
   if(im.parts.some(p=>p.missing)) ctx.warn.add('An ironmongery item in this door no longer exists — choose another');
   const custom = !!(l.iron && Array.isArray(l.iron.items));
@@ -1282,9 +1325,9 @@ function profileBuild(l){
     warn:[...ctx.warn], geo:{len}};
 }
 
-let NEST = null;
+let NEST = null, TRANSPORT = null;
 const BUILD = new Map();
-function dirty(){ NEST=null; BUILD.clear(); }
+function dirty(){ NEST=null; BUILD.clear(); if(typeof BASE!=='undefined') BASE.clear(); TRANSPORT=null; }
 function lineBuild(l){
   let b=BUILD.get(l.id);
   if(!b){ const f=(TYPES[l.type]||TYPES.cabinet).fam;
@@ -1301,9 +1344,13 @@ function packPieces(pieces, info){
   for(const p of pieces){
     let segs=[{a:p.a,b:p.b}], over=false;
     if(!orientations(info,p.a,p.b).length){
-      const run=UL-k;
-      if(run>E && p.b+k<=UW+E){ const s=Math.ceil(p.a/run-E); segs=Array.from({length:s},()=>({a:p.a/s,b:p.b})); }
-      else if(run>E && !info.grain && p.a+k<=UW+E){ const s=Math.ceil(p.b/run-E); segs=Array.from({length:s},()=>({a:p.a,b:p.b/s})); }
+      // larger than the sheet: cut it into the fewest equal sections that do fit (along its length,
+      // across its width, or both) — each section is then nested and bought like any other piece
+      let best=null;
+      for(let sa=1; sa<=40 && (!best || sa<best.sa*best.sb); sa++)
+        for(let sb=1; sb<=40 && (!best || sa*sb<best.sa*best.sb); sb++)
+          if(orientations(info,p.a/sa,p.b/sb).length){ best={sa,sb}; break; }
+      if(best) segs=Array.from({length:best.sa*best.sb},()=>({a:p.a/best.sa,b:p.b/best.sb}));
       else over=true;
     }
     const n=Math.max(0,Math.round(p.n));
@@ -1371,7 +1418,7 @@ function guillotine(items, info, UL, UW, k, split, fit){
 function buildNest(){
   const mats={};
   S.lines.forEach(l=>{
-    const q=Math.round(num(l.qty)); if(q<=0) return;
+    const q=lineQty(l); if(q<=0) return;
     lineBuild(l).pieces.forEach(p=>{
       const e = mats[p.mid] || (mats[p.mid]={mid:p.mid, pieces:[], area:0, pcs:0, byLine:{}});
       const A=p.a*p.b*p.n*q;
@@ -1395,7 +1442,7 @@ function sheetShare(mid, l, b){
 // solid timber across the project, by species × hardwood/softwood × nominal sawn thickness
 function timberSummary(){
   const acc=new Map(), order=(S.thk||[]).slice().sort((a,b)=>num(a.max)-num(b.max)).map(x=>x.n);
-  S.lines.forEach(l=>{ const q=num(l.qty); if(!(q>0)) return;
+  S.lines.forEach(l=>{ const q=lineQty(l); if(!(q>0)) return;
     (lineBuild(l).timber||[]).forEach(t=>{
       const m=M(t.mid), cls=thkClass(Math.min(t.t,t.w)), k=t.mid+'|'+cls;
       let e=acc.get(k);
@@ -1407,24 +1454,46 @@ function timberSummary(){
     .sort((a,b)=>a.cls.localeCompare(b.cls)*-1 || a.n.localeCompare(b.n) || oi(a.thk)-oi(b.thk));
 }
 
-function priceLine(l){
-  const P=S.params, C=S.commercial, b=lineBuild(l);
+// everything in an item's cost except transport (which may be shared across the project)
+const BASE = new Map();
+function priceBase(l){
+  let x=BASE.get(l.id); if(x) return x;
+  const P=S.params, b=lineBuild(l), byArea=(S.opts||{}).sheetPricing==='area';
   const grp=new Map();
   b.pieces.forEach(p=>{ const k=p.role+'|'+p.mid;
     if(!grp.has(k)) grp.set(k,{role:p.role, mid:p.mid, area:0, pcs:0});
     const g=grp.get(k); g.area+=p.a*p.b*p.n; g.pcs+=p.n; });
   const sheetRows=[...grp.values()].map(g=>{
     const e=sheetShare(g.mid,l,b), info=e.info;
-    const q = info.solo ? (e.pcs>0 ? g.pcs*e.count/e.pcs : 0) : (e.area>0 ? g.area*e.count/e.area : 0);
+    let q, waste=null;
+    if(info.solo) q = e.pcs>0 ? g.pcs*e.count/e.pcs : 0;                    // door cores: one blank per leaf, always
+    else if(byArea){ waste=wastePct(M(g.mid), P.sheetWastePct); q = g.area*(1+waste/100)/(info.L*info.W); }   // area used + waste %
+    else q = e.area>0 ? g.area*e.count/e.area : 0;                          // share of the whole sheets in the layout
     return {n:g.role+' — '+info.name, q, u:'sheet', r:info.rate, amt:q*info.rate, mid:g.mid,
-            area:g.area, pcs:g.pcs, nest:true};
+            area:g.area, pcs:g.pcs, nest:true, waste};
   });
   const rows=[...sheetRows, ...b.rows];
   const material = rows.reduce((a,r)=>a+r.amt,0);
   const labour   = b.hours * P.labourRate;
   const consum   = material * P.consumablesPct/100;
-  const trans    = (S.transport.find(t=>t[0]===S.project.location)||['',0])[1];
-  const manpower = labour + (+trans) + b.install + b.handover;
+  x={b, rows, material, labour, consum, base: material + consum + labour + b.install + b.handover};
+  BASE.set(l.id,x); return x;
+}
+// transport for one unit of an item: the location rate per item, or the item's share of a per-project amount
+function transportOf(l){
+  const rate=num((S.transport.find(t=>t[0]===S.project.location)||['',0])[1]);
+  if((S.opts||{}).transport!=='project') return rate;
+  if(!TRANSPORT){
+    const total=rate*Math.max(0,num(S.params.transportTrips)||1);
+    const sum=S.lines.reduce((s,x)=>s+priceBase(x).base*lineQty(x),0);
+    TRANSPORT={total, sum};
+  }
+  return TRANSPORT.sum>0 ? TRANSPORT.total*priceBase(l).base/TRANSPORT.sum : 0;
+}
+function priceLine(l){
+  const C=S.commercial, x=priceBase(l), b=x.b, {rows, material, labour, consum}=x;
+  const trans    = transportOf(l);
+  const manpower = labour + trans + b.install + b.handover;
   const direct   = material + consum + manpower;
   const projOH   = direct * C.projectOverheadPct/100;
   const coOH     = direct * C.companyOverheadPct/100;
@@ -1432,8 +1501,8 @@ function priceLine(l){
   const cost     = direct + projOH + coOH + cont;
   const margin   = cost * C.marginPct/100;
   const rate     = cost + margin + num(l.extra);
-  return {...b, rows, material, labour, consum, trans:+trans, manpower, direct,
-    projOH, coOH, cont, cost, margin, rate, qty:num(l.qty), amount:rate*num(l.qty)};
+  return {...b, rows, material, labour, consum, trans, manpower, direct,
+    projOH, coOH, cont, cost, margin, rate, qty:lineQty(l), amount:rate*lineQty(l)};
 }
 
 
@@ -1484,6 +1553,12 @@ function migrate(o){
   }
   ['wasteFactor','veneerCoverage','lippingWaste','frameThk','frameAllow','archW','archT','archFaces','archAllow',
    'lipW','lipAllow','stileRailAllow'].forEach(k=>delete s.params[k]);
+  s.opts={...SEED_OPTS, ...(o.opts||{})};
+  if(!s.ironItems.some(i=>i.perLeaf!==undefined)){
+    s.ironItems=s.ironItems.map(i=>({...i, perLeaf:PER_LEAF_SEED.has(i.id)?1:0}));
+    s.ironSets=s.ironSets.map(x=>(x.id==='IM03' && JSON.stringify(x.items)===OLD_IM03)
+      ? {...x, items:[['HGF',4],['LOCK',1],['LEV',1],['CLO',1],['FBLT',2],['SIGN',2]]} : x);
+  }
   if(!(o.sizes && o.sizes.length) && !o.sizesTouched) s.sizes=SEED_SIZES.map(z=>({...z}));
   if(!(o.thk && o.thk.length)) s.thk=SEED_THK.map(x=>({...x}));
   const archSides = op.archFaces!==undefined ? int(op.archFaces) : 2;
@@ -1685,13 +1760,13 @@ function breakdown(p){
   let h='<div class="bd bdmat"><div class="secttl">Materials &amp; cost — per item</div><table><thead><tr><th>Line</th><th class="n">Qty</th><th>Unit</th><th class="n">Rate</th><th class="n">Amount</th></tr></thead><tbody>'+grp('Material');
   if(!p.rows.length) h+=`<tr class="nt"><td colspan="5">No materials yet — fill in the sizes above.</td></tr>`;
   p.rows.forEach(r=>{
-    h+=row(r.n,r.q,r.u,r.r,r.amt,'', r.nest ? `${fmt(r.pcs,0)} pcs · ${fmt(r.area,3)} m² net — share of the nested sheets` : '');
+    h+=row(r.n,r.q,r.u,r.r,r.amt,'', r.nest ? `${fmt(r.pcs,0)} pcs · ${fmt(r.area,3)} m² net — ${r.waste!=null?`area used + ${fmt(r.waste,0)}% waste`:'share of the nested sheets'}` : '');
     if(r.parts) r.parts.forEach(x=>h+=row('   · '+x.n,x.q,'no',x.r,x.amt)); });
   h+=row('Material cost','','','',p.material,'s');
   h+=grp('Manpower');
   h+=row('Labour '+fmt(p.hours,2)+' h','','@ '+fmt(S.params.labourRate,0)+'/h','',p.labour);
   h+=row('Consumables '+S.params.consumablesPct+'%','','','',p.consum);
-  h+=row('Transport — '+S.project.location,'','','',p.trans);
+  h+=row('Transport — '+S.project.location+((S.opts||{}).transport==='project'?' (share of the project)':''),'','','',p.trans);
   h+=row('Installation','','','',p.install);
   h+=row('Final handover','','','',p.handover);
   h+=row('Direct cost','','','',p.direct,'s');
@@ -1712,7 +1787,7 @@ function itemCutRows(b){
   return [...agg.values()];
 }
 function cutSection(l,p){
-  const q=num(l.qty), sheets=itemCutRows(p), tim=p.timber||[];
+  const q=lineQty(l), sheets=itemCutRows(p), tim=p.timber||[];
   let h=`<div class="bd bdcut"><div class="secttl">Cut list — per item${q!==1?` · × ${fmt(q,0)} for this line`:''}</div>`;
   if(!sheets.length && !tim.length) return h+'<p class="nestnote" style="padding:0 14px">Nothing to cut yet — fill in the sizes above.</p></div>';
   if(sheets.length){
@@ -1765,15 +1840,16 @@ function hwSection(l,p){
     const custom=!!(l.iron && Array.isArray(l.iron.items)), im=p.iron||{parts:[],total:0};
     const set=S.ironSets.find(s=>s.id===l.ironSet);
     h+=`<div class="secttl">Ironmongery — ${esc(set?set.n:'no set')}${custom?' <span class="tag warn">customised for this door</span>':''}</div>
-      <table><thead><tr><th>Item</th><th class="n" style="width:90px">Qty</th><th class="n">Rate</th><th class="n">Amount</th><th></th></tr></thead><tbody>`;
-    if(!im.parts.length) h+=`<tr class="nt"><td colspan="5">No ironmongery on this door.</td></tr>`;
+      <table><thead><tr><th>Item</th><th class="n" style="width:90px">Qty${(p.geo||{}).nLeaf===2?' / leaf':''}</th><th class="n">Total</th><th class="n">Rate</th><th class="n">Amount</th><th></th></tr></thead><tbody>`;
+    if(!im.parts.length) h+=`<tr class="nt"><td colspan="6">No ironmongery on this door.</td></tr>`;
     const items=S.ironItems.map(i=>[i.id,i.n]);
     im.parts.forEach((x,i)=>{ const k=esc(l.id+'|'+i), li=x.missing?[[x.id,'⚠ Missing — choose another'],...items]:items;
       h+=`<tr><td><select data-irid="${k}">${opts(li,x.id)}</select></td>
-        <td><input type="number" min="0" step="1" data-irq="${k}" value="${esc(x.q)}"></td>
+        <td><input type="number" min="0" step="1" data-irq="${k}" value="${esc(x.base)}"></td>
+        <td class="n">${fmt(x.q,0)}${x.mult>1?' <span class="tag info">× 2 leaves</span>':''}</td>
         <td class="n">${fmt(x.r)}</td><td class="n">${fmt(x.amt)}</td>
         <td><button class="rmbtn" data-irdel="${k}" title="Remove from this door">${icon('trash')}</button></td></tr>`; });
-    h+=`</tbody><tfoot><tr><td>Set total</td><td></td><td></td><td class="n">${fmt(im.total)}</td><td></td></tr></tfoot></table>
+    h+=`</tbody><tfoot><tr><td>Set total</td><td></td><td></td><td></td><td class="n">${fmt(im.total)}</td><td></td></tr></tfoot></table>
       <div class="hwbar"><button class="btn sm" data-iradd="${lid}"${S.ironItems.length?'':' disabled'}>${icon('plus')}<span>Add ironmongery</span></button>
       ${custom?`<button class="btn sm gho" data-irreset="${lid}">${icon('refresh')}<span>Back to the set</span></button>`:''}
       <span class="nestnote" style="margin:0">Changes here apply to this door only. Edit the set itself under Ironmongery.</span></div>`;
@@ -1791,7 +1867,7 @@ function bomName(r){
 }
 function bomRows(){
   const nest=getNest(), acc={};
-  S.lines.forEach(l=>{ const p=priceLine(l), q=num(l.qty), t=TYPES[l.type]||TYPES.cabinet;
+  S.lines.forEach(l=>{ const p=priceLine(l), q=lineQty(l), t=TYPES[l.type]||TYPES.cabinet;
     // ironmongery is bought item by item, so a set is listed as its items
     const flat=[]; p.rows.forEach(r=>{ if(r.parts) r.parts.forEach(x=>flat.push({n:x.n, q:x.q, u:'no', r:x.r, amt:x.amt, mid:'IRONITEM:'+x.id}));
       else flat.push(r); });
@@ -1808,7 +1884,9 @@ function bomRows(){
   Object.values(acc).forEach(a=>{
     if(!a.nest) return;
     const e=nest.mats[a.mid];
-    if(e){ a.q=e.count; a.amt=e.count*e.info.rate; }   // the BOM buys exactly the sheets in the layout
+    if(!e) return; a.layout=e.count;
+    // whole-sheet pricing (and door cores always): the BOM buys exactly the sheets in the layout
+    if(e.info.solo || (S.opts||{}).sheetPricing!=='area'){ a.q=e.count; a.amt=e.count*e.info.rate; }
   });
   return Object.values(acc).map(a=>({...a, byLine:Object.values(a.byLine).sort((x,y)=>y.amt-x.amt)}))
     .sort((a,b)=>b.amt-a.amt);
@@ -1917,7 +1995,7 @@ function viewBom(){
     const isOpen = openBom.has(r.mid);
     h += `<tr class="bomrow${isOpen?' open':''}" data-bomtoggle="${esc(r.mid)}" tabindex="0" aria-expanded="${isOpen}">
       <td><span class="tchev${isOpen?' open':''}">${icon('chevron')}</span></td>
-      <td>${esc(r.n)}</td><td class="num">${qfmt(r.q,r.u)}</td><td class="lab">${esc(r.u)}</td>
+      <td>${esc(r.n)}${r.nest && r.layout!=null && Math.abs(r.layout-r.q)>1e-9?` <span class="tag" title="Priced by area used + waste; the cutting layout uses this many whole sheets">${fmt(r.layout,0)} in the layout</span>`:''}</td><td class="num">${qfmt(r.q,r.u)}</td><td class="lab">${esc(r.u)}</td>
       <td class="num">${money(r.amt)}</td><td class="num lab">${fmt(tot>0?r.amt/tot*100:0,1)}%</td></tr>`;
     if(isOpen) h += `<tr><td colspan="6" style="padding:0">${bomExpand(r)}</td></tr>`;
   });
@@ -1983,7 +2061,8 @@ function viewRates(){
         <td><select data-mat="${esc(m.id)}" data-k="g">${S.types.map(t=>`<option value="${esc(t.id)}"${t.id===m.g?' selected':''}>${esc(t.n)}</option>`).join('')}</select></td>
         <td><select data-mat="${esc(m.id)}" data-k="u">${UNITS.map(u=>`<option value="${u}"${u===m.u?' selected':''}>${u}</option>`).join('')}</select></td>
         <td><input type="number" step="0.5" min="0" data-mat="${esc(m.id)}" data-k="r" value="${esc(m.r)}"></td>
-        <td>${sh?'<span class="lab" title="Sheet goods: the waste is the offcut in the cutting layout">nested</span>'
+        <td>${sh && (S.opts||{}).sheetPricing!=='area'?'<span class="lab" title="Sheet goods: the waste is the offcut in the cutting layout">nested</span>'
+          :sh?`<input type="number" step="1" min="0" data-mat="${esc(m.id)}" data-k="w" value="${esc(m.w??'')}" placeholder="${esc(S.params.sheetWastePct)}">`
           :`<input type="number" step="1" min="0" data-mat="${esc(m.id)}" data-k="w" value="${esc(m.w??'')}" placeholder="${esc(wastePlaceholder(m))}">`}</td>
         ${isTim?`<td><select data-mat="${esc(m.id)}" data-k="cls"><option value="hard"${m.cls!=='soft'?' selected':''}>Hardwood</option><option value="soft"${m.cls==='soft'?' selected':''}>Softwood</option></select></td>`:''}
         ${sheetish ? (sh ? `<td><input type="number" step="0.01" min="0" data-mat="${esc(m.id)}" data-k="sl" value="${esc(m.sl??'')}" placeholder="${S.params.sheetL}"></td>
@@ -2017,7 +2096,7 @@ function viewRates(){
   h+=`<div class="grp"><div class="typehead"><h2 class="sec" style="margin:0">Transport by location</h2><span class="spacer"></span>
     <button class="btn sm" id="btnAddTrans">${icon('plus')}<span>Add location</span></button></div>
     <div class="tw"><table class="grid"><thead><tr>
-    <th>Location</th><th class="num" style="width:130px">Rate / unit</th><th style="width:38px"></th></tr></thead><tbody>`;
+    <th>Location</th><th class="num" style="width:150px">${(S.opts||{}).transport==='project'?'Rate / trip':'Rate / item'}</th><th style="width:38px"></th></tr></thead><tbody>`;
   S.transport.forEach((t,i)=>{ h+=`<tr data-q="${esc(('transport '+t[0]).toLowerCase())}">
     <td><input type="text" data-transname="${i}" value="${esc(t[0])}" style="font-weight:600"></td>
     <td><input type="number" step="1" min="0" data-trans="${i}" value="${esc(t[1])}"></td>
@@ -2051,6 +2130,7 @@ const PGROUPS=[
    ['areaWastePct','Area finishes on joinery (%)','veneer, paint and other m² finishes — added on top of the net area'],
    ['leafWastePct','Finishes on door leaves (%)','m² finishes on door leaves'],
    ['edgeWastePct','Edge banding (%)','added on top of the banded edge length'],
+   ['sheetWastePct','Sheet materials (%)','only when sheets are priced by area used — see Pricing options'],
  ]],
  ['Cabinet hardware',[
    ['hingeSpacing','Hinge spacing (m)','hinges per door = door height ÷ spacing, rounded up'],
@@ -2089,6 +2169,7 @@ const PGROUPS=[
    ['handoverCab','Final handover, joinery',''],
    ['handoverDoor','Final handover, door',''],
    ['consumablesPct','Consumables (% of material)',''],
+   ['transportTrips','Transport trips for the project','only when transport is charged once per project'],
    ['profHoursPerM','Profile items — hours per metre',''],
    ['profInstallPerM','Profile items — installation per metre',''],
  ]],
@@ -2098,6 +2179,19 @@ function viewParams(){
   h+=`<div class="note"><strong>Every constant the calculation uses lives here.</strong> Change one and every item reprices
     immediately — including the cutting layouts. Door frame, architrave and lipping sections, with their wastage, are under
     <button class="linkbtn" data-tab="profiles">Profiles &amp; sizes</button>; a material's own waste % is on <button class="linkbtn" data-tab="rates">Rates</button>.</div>`;
+  const O={...SEED_OPTS, ...(S.opts||{})};
+  const optRow=(k,label,note,list)=>`<tr><td>${esc(label)}<div class="pnote">${esc(note)}</div></td>
+    <td style="width:300px"><select data-opt="${k}">${opts(list,O[k])}</select></td></tr>`;
+  h+=`<div class="grp"><h2 class="sec">Pricing options</h2><div class="tw"><table class="grid"><tbody>
+    ${optRow('sheetPricing','Sheet materials are priced by','Whole sheets: each item carries its share of the sheets the job must buy, so a single small item can carry a full sheet. Area used: each item pays for its own area plus the sheet waste % — the same rate however many items are on the job. Door cores are always one blank per leaf.',
+      [['sheets','Whole sheets in the cutting layout'],['area',`Area used + ${S.params.sheetWastePct}% waste`]])}
+    ${optRow('transport','Transport is charged','Per item: the location rate is added to every unit. Once per project: location rate × trips, shared across the items in proportion to their cost.',
+      [['item','Per item'],['project',`Once per project (${fmt(num(S.params.transportTrips)||1,0)} trip${(num(S.params.transportTrips)||1)===1?'':'s'}), shared across items`]])}
+    ${optRow('insideHandles','Handles on inside drawers','Inside drawers sit behind the doors. Outside drawer fronts and doors always get a handle.',
+      [['1','Yes — one per inside drawer'],['0','No handles on inside drawers']])}
+    <tr><td>Double-leaf doors<div class="pnote">Ironmongery items ticked "Per leaf" — hinges, handle sets, closers — are doubled on a double-leaf door.</div></td>
+    <td><button class="btn sm" data-tab="iron">${icon('iron')}<span>Choose the per-leaf items</span></button></td></tr>
+  </tbody></table></div></div>`;
   h+='<div data-scope="params"><div class="pgrid">';
   PGROUPS.forEach(([title,items])=>{
     h+=`<div class="grp"><h2 class="sec">${esc(title)}</h2><div class="tw"><table class="grid"><tbody>`;
@@ -2115,14 +2209,16 @@ function viewIron(){
   const items=S.ironItems.map(i=>[i.id,i.n]);
   let h=`<div class="note"><strong>Door hardware is priced as sets.</strong> Build each set from the items below — add, remove,
     change quantities or swap an item — and choose the set on each door. A single door can also be customised on its card
-    under <strong>Hardware</strong>. On fire-rated doors every item must carry certification for the rating.</div>
+    under <strong>Hardware</strong>. Write each set for <strong>one leaf</strong>: items ticked <strong>Per leaf</strong>
+    (hinges, handle sets, closers) are doubled automatically on a double-leaf door; the rest (lock, flush bolts, signage) are counted once. On fire-rated doors every item must carry certification for the rating.</div>
     <div class="bar"><button class="btn pri" id="btnAddIron">${icon('plus')}<span>Add item</span></button>
     <button class="btn" data-act="iron-add-set">${icon('plus')}<span>Add set</span></button></div>
     <h2 class="sec">Ironmongery items</h2><div class="tw"><table class="grid"><thead><tr>
-    <th>Item</th><th class="num" style="width:130px">Rate</th><th class="num" style="width:90px">Used in</th><th style="width:38px"></th></tr></thead><tbody>`;
+    <th>Item</th><th class="num" style="width:130px">Rate</th><th class="c" style="width:90px" title="Doubled on a double-leaf door">Per leaf</th><th class="num" style="width:90px">Used in</th><th style="width:38px"></th></tr></thead><tbody>`;
   S.ironItems.forEach(i=>{ const used=S.ironSets.filter(s=>s.items.some(x=>x[0]===i.id)).length;
     h+=`<tr><td><input type="text" data-iron="${esc(i.id)}" data-k="n" value="${esc(i.n)}" style="font-weight:600"></td>
     <td><input type="number" step="5" min="0" data-iron="${esc(i.id)}" data-k="r" value="${esc(i.r)}"></td>
+    <td class="c"><input type="checkbox" data-iron="${esc(i.id)}" data-k="perLeaf"${i.perLeaf?' checked':''} aria-label="Per leaf — doubled on a double-leaf door"></td>
     <td class="num lab">${used} set${used===1?'':'s'}</td>
     <td><button class="rmbtn" data-del-iron="${esc(i.id)}" title="${used?'Used in a set — remove it from the sets first':'Remove'}"${used?' disabled':''}>${icon('trash')}</button></td></tr>`; });
   h+='</tbody></table></div><h2 class="sec">Sets</h2><div class="setgrid">';
@@ -2914,6 +3010,8 @@ function CloudStore(cfg){
             expires_in:h.get('expires_in')||3600, user:{}});
       return {type:h.get('type')||''};
     },
+    /* Google / Apple: the provider signs the person in and sends them back here with the session */
+    oauthUrl(provider,redirect){ return base+'/auth/v1/authorize?provider='+encodeURIComponent(provider)+(redirect?'&redirect_to='+encodeURIComponent(redirect):''); },
     async signIn(email,password){
       const r=await auth('/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});
       const j=await r.json().catch(()=>({}));
@@ -3062,6 +3160,8 @@ function friendly(e){
     return expired() ? 'Your licence has ended, so changes are paused until it is renewed.' : 'That change is not allowed.';
   if(/Failed to fetch|NetworkError|load failed/i.test(m)) return 'Could not reach the server — check your connection and try again.';
   if(m==='signed-out') return 'Your session ended — sign in again.';
+  if(/Could not find the function|schema cache|function .* does not exist/i.test(m))
+    return 'ESTORA is not set up on the server yet — the ESTORA database script has not been run. Please try again later or contact support.';
   return m.replace(/^cloud \d+\s*/,'') || 'Something went wrong.';
 }
 
@@ -3525,7 +3625,15 @@ function busyBtn(btn,on,label){ if(!btn) return; btn.disabled=on; if(on){ btn._t
 function authShell(title,sub,body,footHtml){
   return `<div class="authwrap"><div class="authhd"><div class="mk">${ESTORA_MARK}</div><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div>
     <div class="authcard">${body}</div>${footHtml?`<div class="authfoot">${footHtml}</div>`:''}
-    ${SUPPORT_EMAIL?`<p class="authfoot">Need a hand? <span class="mono">${esc(SUPPORT_EMAIL)}</span></p>`:''}</div>`;
+    ${SUPPORT_EMAIL?`<p class="authfoot">Need a hand? <span class="mono">${esc(SUPPORT_EMAIL)}</span></p>`:''}
+    <p class="authfoot legal">${[['terms','Terms'],['privacy','Privacy'],['refunds','Refunds']].filter(([k])=>VENDOR[k])
+      .map(([k,l])=>`<a href="${esc(VENDOR[k])}" target="_blank" rel="noopener">${l}</a>`).join('<span>·</span>')}</p></div>`;
+}
+const OAUTH_NAME={google:'Google', apple:'Apple', azure:'Microsoft', github:'GitHub'};
+function oauthButtons(){
+  const list=(isCloud() && VENDOR.oauth)||[]; if(!list.length) return '';
+  return `<div class="oauth">${list.map(p=>`<button class="btn authgo" type="button" data-act="oauth" data-id="${esc(p)}">Continue with ${esc(OAUTH_NAME[p]||p)}</button>`).join('')}
+    <div class="orline"><span>or with email</span></div></div>`;
 }
 function authMsg(){
   let h='';
@@ -3537,14 +3645,14 @@ const fld2=(id,label,type,ph,extra)=>`<div class="field"><label for="${id}">${la
   <input id="${id}" name="${id}" type="${type||'text'}" placeholder="${ph||''}" ${extra||''}${APP.authBusy?' disabled':''}></div>`;
 function renderAuth(){
   const s=APP.authScreen, busy=APP.authBusy, d=busy?' disabled':'';
-  if(s==='register') return authShell('Create your account','Seven days free — no card needed.',
-    authMsg()+`<form data-form="register" novalidate>
+  if(s==='register') return authShell('Create your ARCON account','One account for ESTORA, the ARCON website and every ARCON product. Seven days free — no card needed.',
+    authMsg()+oauthButtons()+`<form data-form="register" novalidate>
       ${fld2('rg-org','Company name','text','e.g. Top Factory for Furniture &amp; Wood Works','autocomplete="organization"')}
       ${fld2('rg-name','Your full name','text','Full name','autocomplete="name"')}
       ${fld2('rg-email','Email','email','you@company.com','autocomplete="username"')}
       ${fld2('rg-pass','Choose a password','password','At least 8 characters','autocomplete="new-password"')}
       <button class="btn pri authgo" type="submit"${d}>${busy?'Creating your account…':icon('building')+'<span>Create account — 7-day free trial</span>'}</button></form>`,
-    `<span>Already have an account?</span><button class="btn sm" data-auth="signin">Sign in</button>`);
+    `<span>Already have an ARCON account?</span><button class="btn sm" data-auth="signin">Sign in</button>`);
   if(s==='verify') return authShell('Check your email',`We sent a confirmation link to <b>${esc(APP.authEmail||'your email')}</b>.`,
     authMsg()+`<p class="authnote">Open it to confirm your address — it brings you straight back here and finishes
       setting up. If it does not arrive in a few minutes, look in spam or send it again.</p>
@@ -3555,13 +3663,13 @@ function renderAuth(){
     authMsg()+`<form data-form="forgot" novalidate>${fld2('fg-email','Your email','email','you@company.com','autocomplete="username"')}
       <button class="btn pri authgo" type="submit"${d}>${busy?'Sending…':icon('mail')+'<span>Send the reset link</span>'}</button></form>`,
     `<button class="btn sm" data-auth="signin">Back to sign in</button>`);
-  return authShell('Sign in to ESTORA','Joinery, fit-out and door estimating.',
-    authMsg()+`<form data-form="signin" novalidate>
+  return authShell('Sign in to ESTORA','Use your ARCON account — the same email and password as on the ARCON website.',
+    authMsg()+oauthButtons()+`<form data-form="signin" novalidate>
       ${fld2('si-email','Email','email','you@company.com','autocomplete="username"')}
       ${fld2('si-pass','Password','password','••••••••','autocomplete="current-password"')}
       <button class="btn pri authgo" type="submit"${d}>${busy?'Signing in…':icon('lock')+'<span>Sign in</span>'}</button></form>`,
     `<button class="btn sm" data-auth="forgot">Forgot your password?</button>
-     <button class="btn sm" data-auth="register">New here? Create an account</button>`);
+     <button class="btn sm" data-auth="register">New here? Create an ARCON account</button>`);
 }
 function renderSetPass(){
   return authShell('Choose a new password','Then you go straight in.',
@@ -3791,7 +3899,11 @@ const usd = n => '$'+(Math.round(n*100)%100 ? fmt(n,2) : fmt(n,0));
 function viewLicense(){
   if(!isCloud()) return lockBox('Licences need an account','This copy runs without accounts.');
   const L=lic(), plan=PLANS[L.plan]||PLANS.trial;
-  let h=`<div class="pagehead"><div><h1>Licence</h1><div class="sub">${esc(plan.name)} · ${L.expired?'ended':'valid until'} ${fmtDate(L.expiresOn)}${L.enforce?'':' · limits are switched off'}</div></div></div>`;
+  let h=`<div class="pagehead"><div><h1>Licence</h1><div class="sub">${esc(plan.name)} · ${L.expired?'ended':'valid until'} ${fmtDate(L.expiresOn)}${L.enforce?'':' · limits are switched off'}
+    · ARCON account ${esc((APP.store.user||{}).email||'')}</div></div>
+    <div class="acts">${APP.buying?`<span class="filechip dirty"><span class="dot busy"></span><span class="st">waiting for the payment…</span></span>`:''}
+      <button class="btn ro-ok" data-act="lic-refresh">${icon('refresh')}<span>Check again</span></button>
+      ${L.store && VENDOR.billing?`<a class="btn ro-ok" href="${esc(VENDOR.billing)}" target="_blank" rel="noopener">${icon('commercial')}<span>Manage subscription</span></a>`:''}</div></div>`;
   h+=`<div class="stats" style="padding:0 0 16px">${statTile('Current plan',plan.name,plan.price?`${usd(plan.price)} ${plan.period}`:'No charge',L.expired?'':'hi')}
     ${statTile(L.expired?'Ended':'Days left',L.expired?`${-L.daysLeft}d ago`:String(L.daysLeft),fmtDate(L.expiresOn))}
     ${statTile('Items per project',L.trial?String(L.items||5):'Unlimited',L.trial?'during the trial':'')}
@@ -3799,9 +3911,10 @@ function viewLicense(){
   h+=`<div class="cardbox"><div class="cardhd">${icon('key')}<h3>Activate a licence key</h3></div><div class="cardbd">
     <form data-form="activate" novalidate style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
       <div class="field" style="flex:1 1 260px;margin:0"><label for="lic-key">Licence key</label>
-        <input id="lic-key" class="mono ro-ok" placeholder="ES2-XXXX-XXXX-XXXX-XXX" autocomplete="off"></div>
+        <input id="lic-key" class="mono ro-ok" placeholder="The key from your receipt" autocomplete="off"></div>
       <button class="btn pri ro-ok" type="submit">${icon('check')}<span>Activate</span></button></form>
-    <div class="hint" style="margin-top:8px;font-size:11.5px;color:var(--ink-3)">You receive a key by email once payment is confirmed. The server checks it and applies the plan at once — your project files are not touched.</div>
+    <div class="hint" style="margin-top:8px;font-size:11.5px;color:var(--ink-3)">Bought with this ARCON account? There is nothing to paste — the plan is switched on automatically.
+      Use this box when the purchase was made with a different email: paste the licence key from the receipt and it moves to this account.</div>
   </div></div>`;
   h+=`<div class="cardbox"><div class="cardhd"><h3>Plans</h3><span class="tag info" style="margin-left:auto">USD · one user</span></div><div class="cardbd"><div class="plans two">`;
   PLAN_ORDER.filter(k=>k!=='trial').forEach(k=>{
@@ -3824,9 +3937,70 @@ function viewLicense(){
   }
   return h;
 }
-function buyDlg(k){
-  const p=PLANS[k], link=(CHECKOUT_LINKS||{})[k]||'';
-  if(link){ const a=document.createElement('a'); a.href=link; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); return; }
+/* ---------- buying: the Lemon Squeezy checkout, carrying the ARCON account ---------- */
+function checkoutUrl(k){
+  const link=(CHECKOUT_LINKS||{})[k]||''; if(!link) return '';
+  try{
+    const u=new URL(link), me=APP.store.user||{}, w=APP.who||{};
+    /* the account id travels as custom data and comes back in the webhook, so the
+       payment finds this account without anyone typing a key */
+    if(w.orgId) u.searchParams.set('checkout[custom][org]', w.orgId);
+    u.searchParams.set('checkout[custom][product]','estora');
+    u.searchParams.set('checkout[custom][plan]',k);
+    if(me.email) u.searchParams.set('checkout[email]', me.email);
+    if(w.name) u.searchParams.set('checkout[name]', w.name);
+    const back=appAddress(); if(back) u.searchParams.set('checkout[custom][back]', back);
+    u.searchParams.set('embed','1');
+    return u.toString();
+  }catch(e){ return link; }
+}
+function pricingUrl(k){
+  if(!VENDOR.pricing) return '';
+  try{ const u=new URL(VENDOR.pricing), me=APP.store.user||{}, w=APP.who||{};
+    u.searchParams.set('plan',k); if(w.orgId) u.searchParams.set('org',w.orgId);
+    if(me.email) u.searchParams.set('email',me.email); if(APP.org.name) u.searchParams.set('company',APP.org.name);
+    const back=appAddress(); if(back) u.searchParams.set('back',back);
+    return u.toString(); }catch(e){ return VENDOR.pricing; }
+}
+let lemonLoading=null;
+function loadLemon(){
+  if(window.LemonSqueezy) return Promise.resolve(true);
+  return lemonLoading||(lemonLoading=new Promise(res=>{
+    const s=document.createElement('script'); s.src='https://app.lemonsqueezy.com/js/lemon.js'; s.defer=true;
+    s.onload=()=>{ try{ if(window.createLemonSqueezy) window.createLemonSqueezy();
+        window.LemonSqueezy.Setup({eventHandler:ev=>{ if(ev && ev.event==='Checkout.Success'){ toast('Payment received — switching your plan on…'); watchLicence(true); } }});
+        res(true); }catch(e){ res(false); } };
+    s.onerror=()=>{ lemonLoading=null; res(false); };
+    document.head.appendChild(s);
+    setTimeout(()=>res(!!window.LemonSqueezy), 6000);
+  }));
+}
+/* after a checkout opens, keep asking the server until the plan arrives (the webhook usually lands within seconds) */
+let watchTimer=null;
+function watchLicence(fast){
+  const before=JSON.stringify([lic().plan, lic().expiresOn]); let n=0;
+  clearInterval(watchTimer); APP.buying=true; if(APP.view==='license') renderPanel();
+  watchTimer=setInterval(async ()=>{
+    n++; await refreshWho();
+    if(JSON.stringify([lic().plan, lic().expiresOn])!==before){
+      clearInterval(watchTimer); APP.buying=false; APP._licLoaded=false;
+      try{ if(window.LemonSqueezy) window.LemonSqueezy.Url.Close(); }catch(e){}
+      toast('Your plan is active — '+((PLANS[lic().plan]||{}).name||lic().plan)+' until '+fmtDate(lic().expiresOn)); renderRoot(); return; }
+    if(n>=(fast?40:90)){ clearInterval(watchTimer); APP.buying=false; if(APP.view==='license') renderPanel(); }
+  }, fast?3000:4000);
+}
+async function buyDlg(k){
+  const p=PLANS[k];
+  const site=pricingUrl(k);
+  if(site){ const a=document.createElement('a'); a.href=site; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); watchLicence(false); return; }
+  const url=checkoutUrl(k);
+  if(url){
+    toast('Opening the checkout…');
+    if(await loadLemon()){ try{ window.LemonSqueezy.Url.Open(url); watchLicence(false); return; }catch(e){} }
+    // the checkout script could not load: open the same checkout in a new tab instead
+    const a=document.createElement('a'); a.href=url.replace(/([?&])embed=1(&|$)/,'$1').replace(/[?&]$/,''); a.target='_blank'; a.rel='noopener';
+    document.body.appendChild(a); a.click(); a.remove(); watchLicence(false); return;
+  }
   const text=`Hello ARCON,
 
 We would like the ESTORA ${p.name} plan (${usd(p.price)} ${p.period}).
@@ -3985,6 +4159,8 @@ document.addEventListener('click', async e=>{
     case 'save-org': saveOrg(b); return;
     case 'clear-logo': try{ await saveOrgMeta({logo:''}); renderRoot(); }catch(err){ toast(friendly(err),'crit'); } return;
     case 'buy': buyDlg(b.dataset.plan); return;
+    case 'lic-refresh': await refreshWho(); APP._licLoaded=false; renderRoot(); toast('Licence checked — '+((PLANS[lic().plan]||{}).name||lic().plan)+(lic().expired?' (ended)':'')); return;
+    case 'oauth': location.href=APP.store.oauthUrl(id, appAddress()||location.href.split('#')[0]); return;
     case 'owner-refresh': APP.ownerOrgs=null; renderPanel(); return;
     case 'owner-plan': ownerPlanDlg(id); return;
   }
@@ -4020,6 +4196,8 @@ if('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && docume
    PDFs use the standard PDF fonts, so amounts are shown with the
    currency code (SAR, USD…) rather than a symbol.
    ================================================================== */
+const byAreaMode = () => (S.opts||{}).sheetPricing==='area';
+const sheetNote = () => byAreaMode() ? `Sheet goods are priced by area used plus waste (${S.params.sheetWastePct}% unless the material has its own); door cores are whole blanks.` : 'Sheet quantities are the whole sheets in the cutting layout.';
 const curCode = () => (S && S.project.currency) || '';
 const fileBase = () => String((S&&S.project.name)||'estimate').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').slice(0,40)||'estimate';
 function saveFile(name, bytes, type){
@@ -4092,7 +4270,7 @@ function timberSheet(){
 }
 function bomSheet(){
   const nest=getNest();
-  const rows=brandRows('Material BOM — '+(S.project.name||''), `Sheet quantities are the sheets in the cutting layout · Currency ${curCode()}`);
+  const rows=brandRows('Material BOM — '+(S.project.name||''), `${sheetNote()} · Currency ${curCode()}`);
   rows.push(headRow(['Material','Quantity','Unit','Value','Sheet size (mm)','Net area (m²)','Yield %']));
   let tot=0;
   bomRows().forEach(r=>{ const e=r.nest?nest.mats[r.mid]:null; tot+=r.amt;
@@ -4112,7 +4290,7 @@ function cutSheet(){
   });
   const per=brandRows('Cut list by item — '+(S.project.name||''), 'Parts for one of each item; × Qty for the line');
   per.push(headRow(['Ref','Item','Part','Material','Length mm','Width mm','Qty / item','Line qty','Total']));
-  S.lines.forEach(l=>{ const b=lineBuild(l), q=num(l.qty);
+  S.lines.forEach(l=>{ const b=lineBuild(l), q=lineQty(l);
     itemCutRows(b).forEach(x=>per.push([C(l.id),C((TYPES[l.type]||TYPES.cabinet).n),C(x.role+' · '+x.part),C(sheetInfo(x.mid).name),N(mm(x.a)),N(mm(x.b)),N(x.n),N(q),N(x.n*q)]));
     (b.timber||[]).forEach(t=>per.push([C(l.id),C((TYPES[l.type]||TYPES.cabinet).n),C(t.part+' ('+fmt(t.t,0)+' × '+fmt(t.w,0)+' mm, '+fmt(t.len,3)+' m)'),C(M(t.mid).n),N(t.len*1000),N(t.w),N(t.n),N(q),N(t.n*q)]));
   });
@@ -4259,7 +4437,7 @@ async function exportEstimatePdf(){
       {label:'Total cost',w:11,align:'right'},{label:'Margin',w:10,align:'right'},{label:'Rate',w:11,align:'right'}],
       rows:S.lines.map(l=>{ const p=priceLine(l); return [l.id,(TYPES[l.type]||TYPES.cabinet).n,fmt(p.material),fmt(p.labour),fmt(p.trans+p.install+p.handover),
         fmt(p.direct),fmt(p.projOH+p.coOH+p.cont),fmt(p.cost),fmt(p.margin),{v:fmt(p.rate),bold:true}]; })}},
-    {h:'Materials per item', note:'For one of each item. Sheet goods are the item’s share of the nested sheets.'},
+    {h:'Materials per item', note:'For one of each item. '+(byAreaMode()?sheetNote():'Sheet goods are the item’s share of the nested sheets.')},
     {table:{title:'Materials per item', columns:[{label:'Ref',w:6},{label:'Material',w:52},{label:'Qty',w:10,align:'right'},{label:'Unit',w:7},
       {label:`Rate (${cc})`,w:11,align:'right'},{label:`Amount (${cc})`,w:12,align:'right'}],
       rows:S.lines.flatMap(l=>{ const p=priceLine(l);
@@ -4294,7 +4472,7 @@ function timberBlocks(){
 async function exportBomPdf(){
   const rows=bomRows(), tot=rows.reduce((a,r)=>a+r.amt,0), cc=curCode(), nest=getNest();
   const blocks=[
-    {h:'Material BOM', note:`Procurement quantities for the whole project, in ${cc}. Sheet quantities are the sheets in the cutting layout; ironmongery is listed item by item.`},
+    {h:'Material BOM', note:`Procurement quantities for the whole project, in ${cc}. ${sheetNote()} Ironmongery is listed item by item.`},
     {table:{title:'Material BOM', columns:[{label:'Material',w:40},{label:'Quantity',w:10,align:'right'},{label:'Unit',w:7},{label:'Sheet (mm)',w:12},
       {label:`Value (${cc})`,w:13,align:'right'},{label:'% of material',w:9,align:'right'}],
       rows:[...rows.map(r=>{ const e=r.nest?nest.mats[r.mid]:null;
@@ -4548,9 +4726,10 @@ ROOT.addEventListener('input',e=>{ if(!e.target.closest('#panel')) return; if(!S
   }
   else if(ds.iron){
     const i=S.ironItems.find(x=>x.id===ds.iron);
-    if(i){ const k=ds.k; if(k==='n') i.n=el.value; else i.r=parseFloat(el.value)||0; }
+    if(i){ const k=ds.k; if(k==='n') i.n=el.value; else if(k==='perLeaf') i.perLeaf=el.checked?1:0; else i.r=parseFloat(el.value)||0; }
     renderTotals();
   }
+  else if(ds.opt){ S.opts={...SEED_OPTS, ...(S.opts||{})}; S.opts[ds.opt]= ds.opt==='insideHandles' ? +el.value : el.value; renderTotals(); renderPanel(); }
   else if(ds.setname){ const s=S.ironSets.find(x=>x.id===ds.setname); if(s) s.n=el.value; }
   else if(ds.setitem || ds.setq){
     const [sid,i]=splitKey(ds.setitem||ds.setq), s=S.ironSets.find(x=>x.id===sid), it=s&&s.items[+i]; if(!it) return;
@@ -4585,7 +4764,7 @@ ROOT.addEventListener('input',e=>{ if(!e.target.closest('#panel')) return; if(!S
 ROOT.addEventListener('change',e=>{ if(!e.target.closest('#panel') || !S) return;
   const ds=e.target.dataset;
   const k=ds.hwq||ds.hwxq||ds.irq; if(k){ renderCard(splitKey(k)[0]); return; }
-  if(ds.setq || ds.prof || ds.iron) renderPanel();
+  if(ds.setq || ds.prof || ds.iron || ds.param==='sheetWastePct' || ds.param==='transportTrips') renderPanel();
 });
 function liveFilter(scope, q){
   q=(q||'').trim().toLowerCase();
