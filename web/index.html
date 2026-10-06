@@ -582,9 +582,11 @@ const VENDOR = {
   /* The ESTORA page on the ARCON site. Set it and every "Choose plan" button
      goes there (carrying the account, the email and the way back) instead of
      opening the checkout here. Leave it empty to open the checkout inside ESTORA. */
-  pricing: '',
-  /* Where a customer manages or cancels a subscription (Lemon Squeezy's own page). */
-  billing: 'https://arconget.lemonsqueezy.com/billing',
+  pricing: 'https://arconget.store/products/estora',
+  /* Where a customer manages or cancels a subscription. paddle.net is Paddle's own
+     page for buyers (they look the purchase up by email). To send them straight to
+     your portal instead, paste the link from Paddle > Checkout > Customer portal. */
+  billing: 'https://paddle.net/',
   terms:   'https://arconget.store/terms',
   privacy: 'https://arconget.store/privacy',
   refunds: 'https://arconget.store/refunds',
@@ -616,7 +618,7 @@ const PLAN_ORDER=['trial','monthly','yearly'];
    The checkout opens inside ESTORA and carries the signed-in ARCON account, so
    the plan is switched on automatically when the payment goes through.
    Left empty, the Choose buttons show a "how to buy" message instead. */
-const CHECKOUT_LINKS = { monthly:'https://arconget.lemonsqueezy.com/checkout/buy/7f80256b-a440-4150-b9c8-4473abeaf829', yearly:'https://arconget.lemonsqueezy.com/checkout/buy/14a5f8a8-261e-4161-8ee6-860cfbf17b87' };
+const CHECKOUT_LINKS = { monthly:'', yearly:'' };   // not used: buying happens on the ARCON site (VENDOR.pricing), through Paddle
 const TABS = [
   ['estimate','Schedule','schedule'],['bom','Material BOM','bom'],['cutting','Cutting & timber','cut'],['rates','Rates','rates'],
   ['profiles','Profiles & sizes','ruler'],['params','Parameters','params'],['iron','Ironmongery','iron'],['commercial','Commercial','commercial'],
